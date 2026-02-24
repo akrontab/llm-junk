@@ -1,41 +1,94 @@
 services:
-  ollama-sidecar:
+  # --- Template (No ports or volumes here) ---
+  x-ollama-base: &ollama-base
     image: ollama/ollama:latest
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      default:
+        aliases:
+          - ollama_service
+
+  ollama-gpu:
+    <<: *ollama-base
     container_name: ollama_service
+    profiles: ["gpu"]
     ports:
       - "11434:11434"
     volumes:
       - ollama_storage:/root/.ollama
-      - ./init-ollama.sh:/init-ollama.sh
-    entrypoint: ["/bin/bash", "/init-ollama.sh"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  ollama-cpu:
+    <<: *ollama-base
+    container_name: ollama_service
+    profiles: ["cpu"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_storage:/root/.ollama
+
+  ollama-puller:
+    image: ollama/ollama:latest
+    container_name: ollama_puller
+    volumes:
+      - ollama_storage:/root/.ollama
+    # Connect to the same network as the main service
+    networks:
+      - default
+    # This script starts a temporary server, pulls the models, then shuts down
+    entrypoint: /bin/sh -c "ollama serve & sleep 5 && ollama pull llama3.2 && ollama pull nomic-embed-text && pkill ollama"
+    depends_on:
+      # No strict dependency needed if just filling the volume, 
+      # but keeping it in the same stack.
+      - chromadb
 
   chromadb:
-    image: chromadb/chroma:latest
+    image: chromadb/chroma:0.5.23  # Pin to a version before the v1 API removal
     container_name: chromadb
     ports:
       - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma  # Persist your index
+
   dotnet-api:
-    build: 
-      context: ./MyAiApi
+    build: ./MyAiApi
     container_name: dotnet_api
     environment:
-      - AI_ENDPOINT=http://ollama-sidecar:11434
+      - AI_ENDPOINT=http://ollama_service:11434
       - ASPNETCORE_URLS=http://+:8080
     ports:
       - "5000:8080"
+    # We remove the direct dependency on the ollama YAML key 
+    # to prevent errors when one profile is missing.
     depends_on:
-      - ollama-sidecar
-      - chromadb
+      chromadb:
+        condition: service_started
+      # This is the secret sauce: API won't start until Puller exits 0
+      ollama-puller:
+        condition: service_completed_successfully
 
   file-watcher:
     build: 
       context: ./MyFileWatcher
     container_name: file_watcher
     volumes:
-      - /home/memo/ai-docs:/watch_folder # Map your Linux path to container path
+      # Use a relative path so it works on both Linux and Windows
+      - ./ai-docs:/watch_folder 
     environment:
       - AI_UPLOAD_URL=http://dotnet-api:8080/upload
     depends_on:
       - dotnet-api
+
 volumes:
   ollama_storage:
+  chroma_data:

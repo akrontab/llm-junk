@@ -3,7 +3,7 @@ using System.Text;
 
 // The URL of your .NET Web API (or direct to Ollama if preferred)
 // Here we point directly to the sidecar's port for the fastest response
-var chatClient = new OllamaChatClient(new Uri("http://localhost:11434"), "llama3.2");
+var chatClient = new OllamaChatClient(new Uri("http://localhost:11434"), "llama3");
 
 Console.ForegroundColor = ConsoleColor.Cyan;
 Console.WriteLine("--- Local LLM CLI (Type 'exit' to quit) ---");

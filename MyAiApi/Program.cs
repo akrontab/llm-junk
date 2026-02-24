@@ -1,84 +1,78 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.AI;
-using ChromaDB.Client;
+using Microsoft.SemanticKernel.Connectors.Chroma;
+using Microsoft.SemanticKernel.Embeddings;
+using Microsoft.SemanticKernel.Memory;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var chromaConfigOptions = new ChromaConfigurationOptions("http://chromadb:8000");
+// 1. Unify the Endpoint: Use the ENV var or a reliable default
+var aiEndpoint = builder.Configuration["AI_ENDPOINT"] ?? "http://ollama_service:11434";
+var chromaEndpoint = "http://chromadb:8000";
 
-// Grab the endpoint from Docker environment variables
-var aiEndpoint = builder.Configuration["AI_ENDPOINT"] ?? "http://localhost:11434";
+// Log it so you can see it in 'docker logs dotnet_api'
+Console.WriteLine($"[Config] Connecting to Ollama at: {aiEndpoint}");
 
-// Register the AI Client
-builder.Services.AddChatClient(new OllamaChatClient(new Uri(aiEndpoint), "llama3.2"));
+// 2. Setup the Generator with the unified endpoint
+IEmbeddingGenerator<string, Embedding<float>> generator =
+    new OllamaEmbeddingGenerator(new Uri(aiEndpoint), "nomic-embed-text:latest");
 
-builder.Services.AddEmbeddingGenerator(new OllamaEmbeddingGenerator(aiEndpoint, "nomic-embed-text"));
-builder.Services.AddSingleton(sp => 
-{
-    var config = chromaConfigOptions;
-    return new ChromaClient(config, new HttpClient());
-});
+// 3. Setup Chroma Store
+#pragma warning disable SKEXP0020 
+var chromaStore = new ChromaMemoryStore(chromaEndpoint);
+#pragma warning restore SKEXP0020
+
+// 4. Build Memory using the Bridge
+#pragma warning disable SKEXP0001 
+var memory = new MemoryBuilder()
+    .WithTextEmbeddingGeneration(generator.AsTextEmbeddingGenerationService())
+    .WithMemoryStore(chromaStore)
+    .Build();
+
+builder.Services.AddSingleton<ISemanticTextMemory>(memory);
+#pragma warning restore SKEXP0001
 
 var app = builder.Build();
 
-// 1. Standard Request
-app.MapPost("/ask", async (string prompt, IChatClient chatClient) =>
-{
-    var response = await chatClient.GetResponseAsync(prompt);
-    
-    // In Microsoft.Extensions.AI, 'Text' is the recommended way 
-    // to get the primary string content from the response.
-    return Results.Ok(new { 
-        Answer = response.Text, 
-        Model = "llama3.2" 
-    });
-});
-
-// 2. Streaming Request
-app.MapGet("/stream", async (string prompt, IChatClient chatClient, HttpContext context) =>
-{
-    context.Response.ContentType = "text/plain";
-    await foreach (var update in chatClient.GetStreamingResponseAsync(prompt))
-    {
-        // 'update.Text' contains the incremental chunk
-        await context.Response.WriteAsync(update.Text ?? "");
-        await context.Response.Body.FlushAsync();
-    }
-});
-
+#pragma warning disable SKEXP0001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 app.MapPost("/upload", async (
-    IFormFile file, 
-    IEmbeddingGenerator<string, Embedding<float>> generator,
-    ChromaClient chroma) =>
+    IFormFile file,
+    [FromServices] ISemanticTextMemory memory) =>
 {
-    if (file == null || file.Length == 0) return Results.BadRequest("No file uploaded.");
+    // 1. Validation
+    if (file == null || file.Length == 0)
+        return Results.BadRequest("No file uploaded.");
 
-    // 1. Read file content
-    string fullText = "";
+    // 2. Read the file content
+    string fullText;
     using (var reader = new StreamReader(file.OpenReadStream()))
     {
         fullText = await reader.ReadToEndAsync();
     }
 
-    // 2. Simple Chunking (e.g., chunks of 1000 characters with 100 char overlap)
+    // 3. Chunk the text (using your existing ChunkText helper)
     var chunks = ChunkText(fullText, 1000, 100);
-    var collection = await chroma.GetOrCreateCollection("knowledge_base");
 
-    var collectionClient = new ChromaCollectionClient(collection, chromaConfigOptions, new HttpClient());
-    
+    // 4. Save to Chroma via Semantic Kernel
+    // SK handles the embedding generation and the Chroma 'Add' call internally
     foreach (var chunk in chunks)
     {
-        var embeddings = await generator.GenerateAsync([chunk]);
-        
-        await collectionClient.Add(
-            ids: [Guid.NewGuid().ToString()],
-            embeddings: [embeddings[0].Vector.ToArray()],
-            metadatas: [new Dictionary<string, object> { { "content", chunk }, { "source", file.FileName } }]
+        await memory.SaveInformationAsync(
+            collection: "knowledge_base",
+            text: chunk,
+            id: Guid.NewGuid().ToString(),
+            description: file.FileName // Useful for metadata/searching later
         );
     }
 
-    return Results.Ok($"Processed {file.FileName} into {chunks.Count} chunks.");
+    return Results.Ok(new
+    {
+        Message = $"Successfully indexed {file.FileName}",
+        Chunks = chunks.Count
+    });
 })
-.DisableAntiforgery(); // Useful for testing via Postman/Curl
+.DisableAntiforgery();
+#pragma warning restore SKEXP0001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 // Helper Method for Chunking
 List<string> ChunkText(string text, int chunkSize, int overlap)
