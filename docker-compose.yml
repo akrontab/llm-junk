@@ -1,0 +1,41 @@
+services:
+  ollama-sidecar:
+    image: ollama/ollama:latest
+    container_name: ollama_service
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_storage:/root/.ollama
+      - ./init-ollama.sh:/init-ollama.sh
+    entrypoint: ["/bin/bash", "/init-ollama.sh"]
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: chromadb
+    ports:
+      - "8000:8000"
+  dotnet-api:
+    build: 
+      context: ./MyAiApi
+    container_name: dotnet_api
+    environment:
+      - AI_ENDPOINT=http://ollama-sidecar:11434
+      - ASPNETCORE_URLS=http://+:8080
+    ports:
+      - "5000:8080"
+    depends_on:
+      - ollama-sidecar
+      - chromadb
+
+  file-watcher:
+    build: 
+      context: ./MyFileWatcher
+    container_name: file_watcher
+    volumes:
+      - /home/memo/ai-docs:/watch_folder # Map your Linux path to container path
+    environment:
+      - AI_UPLOAD_URL=http://dotnet-api:8080/upload
+    depends_on:
+      - dotnet-api
+volumes:
+  ollama_storage:
