@@ -15,7 +15,7 @@ Console.WriteLine($"[Config] Connecting to Ollama at: {aiEndpoint}");
 
 // 2. Setup the Generator with the unified endpoint
 IEmbeddingGenerator<string, Embedding<float>> generator =
-    new OllamaEmbeddingGenerator(new Uri(aiEndpoint), "nomic-embed-text:latest");
+    new OllamaEmbeddingGenerator(new Uri(aiEndpoint), "qwen3-embedding:latest");
 
 // 3. Setup Chroma Store
 #pragma warning disable SKEXP0020 
@@ -57,7 +57,7 @@ app.MapPost("/upload", async (
     // SK handles the embedding generation and the Chroma 'Add' call internally
     foreach (var chunk in chunks)
     {
-        await memory.SaveInformationAsync(
+        var result = await memory.SaveInformationAsync(
             collection: "knowledge_base",
             text: chunk,
             id: Guid.NewGuid().ToString(),

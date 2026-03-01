@@ -46,7 +46,7 @@ services:
     networks:
       - default
     # This script starts a temporary server, pulls the models, then shuts down
-    entrypoint: /bin/sh -c "ollama serve & sleep 5 && ollama pull llama3.2 && ollama pull nomic-embed-text && pkill ollama"
+    entrypoint: /bin/sh -c "ollama serve & sleep 5 && ollama pull llama3.2:3b && ollama pull qwen3-embedding && pkill ollama"
     depends_on:
       # No strict dependency needed if just filling the volume, 
       # but keeping it in the same stack.

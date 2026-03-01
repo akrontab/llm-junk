@@ -1,0 +1,1 @@
+docker compose --profile gpu up --build
