@@ -46,7 +46,7 @@ services:
     networks:
       - default
     # This script starts a temporary server, pulls the models, then shuts down
-    entrypoint: /bin/sh -c "ollama serve & sleep 5 && ollama pull llama3.2:3b && ollama pull qwen3-embedding && pkill ollama"
+    entrypoint: /bin/sh -c "ollama serve & sleep 5 && ollama pull llama3.2:3b && ollama pull qwen3-embedding && pkill ollama & sleep 5"
     depends_on:
       # No strict dependency needed if just filling the volume, 
       # but keeping it in the same stack.
@@ -66,6 +66,7 @@ services:
     environment:
       - AI_ENDPOINT=http://ollama_service:11434
       - ASPNETCORE_URLS=http://+:8080
+      - CHROMADB_ENDPOINT = http://chromadb:8000
     ports:
       - "5000:8080"
     # We remove the direct dependency on the ollama YAML key 
@@ -73,7 +74,7 @@ services:
     depends_on:
       chromadb:
         condition: service_started
-      # This is the secret sauce: API won't start until Puller exits 0
+      # API won't start until Puller exits 0
       ollama-puller:
         condition: service_completed_successfully
 

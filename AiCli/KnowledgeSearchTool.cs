@@ -3,6 +3,7 @@ using Microsoft.SemanticKernel.Connectors.Chroma;
 using Microsoft.SemanticKernel.Embeddings;
 using Microsoft.SemanticKernel.Memory;
 using System.ComponentModel;
+using System.Text;
 
 public class KnowledgeBasePlugin(string aiEndpoint)
 {
@@ -24,14 +25,14 @@ public class KnowledgeBasePlugin(string aiEndpoint)
 #pragma warning restore SKEXP0020 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         var results = memory.SearchAsync("knowledge_base", query, limit: 3);
-        var combinedText = "";
+        var combinedText = new StringBuilder();
 
         await foreach (var result in results)
         {
-            combinedText += $"\n- {result.Metadata.Text}";
+            combinedText.AppendLine($"\n- {result.Metadata.Text})";
         }
 
-        return string.IsNullOrEmpty(combinedText)
+        return combinedText.Length > 0
             ? "No relevant documents found."
             : $"Found these documents:\n{combinedText}";
     }

@@ -28,6 +28,7 @@ while (true)
     var contextBuilder = new StringBuilder();
 
     contextBuilder.AppendLine("CONTEXT:");
+    contextBuilder.AppendLine("You are a research assistant. If you don't know an answer, use the SearchDocuments tool to look it up in our internal database.");
     contextBuilder.AppendLine("If no documents are returned by the tool call then try to answer as best you can, but also acknowledge no documents were found");
     contextBuilder.AppendLine();
 
@@ -35,7 +36,7 @@ while (true)
     Console.Write("AI: ");
     Console.ResetColor();
 
-    var prompt = contextBuilder.ToString() + $"USER: {input}";
+    var prompt = contextBuilder.ToString() + $"USER PROMPT: {input}";
 
     await foreach (var update in chatClient.GetStreamingResponseAsync(prompt, chatOptions))
     {

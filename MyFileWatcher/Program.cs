@@ -6,7 +6,7 @@ var builder = Host.CreateApplicationBuilder(args);
 
 // Configuration
 var watchPath = "/watch_folder";
-var apiUploadUrl = Environment.GetEnvironmentVariable("AI_UPLOAD_URL");
+var apiUploadUrl = Environment.GetEnvironmentVariable("AI_UPLOAD_URL") ?? "http://dotnet-api:8080/upload";
 
 builder.Services.AddHostedService<FileWatcherService>(sp =>
     new FileWatcherService(watchPath, apiUploadUrl));
