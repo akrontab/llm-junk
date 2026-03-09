@@ -1,4 +1,4 @@
-﻿namespace DataInjestion.FileReaders
+﻿namespace DataIngestion.FileReaders
 {
     internal static class FileExtentionMap
     {

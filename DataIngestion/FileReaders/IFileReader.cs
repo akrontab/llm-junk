@@ -1,4 +1,4 @@
-﻿namespace DataInjestion.FileReaders
+﻿namespace DataIngestion.FileReaders
 {
     /// <summary>
     /// IFileReaders provide the file content 

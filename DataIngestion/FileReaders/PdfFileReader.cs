@@ -1,6 +1,6 @@
-﻿namespace DataInjestion.FileReaders
+﻿namespace DataIngestion.FileReaders
 {
-    internal class TextFileReader : IFileReader
+    internal class PdfFileReader : IFileReader
     {
         public Task<string> GetFileContentAsync(string filePath)
         {

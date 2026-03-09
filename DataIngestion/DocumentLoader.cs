@@ -1,6 +1,6 @@
-﻿using DataInjestion.FileReaders;
+﻿using DataIngestion.FileReaders;
 
-namespace DataInjestion.Chunking
+namespace DataIngestion.Chunking
 {
     internal class DocumentLoader
     {
