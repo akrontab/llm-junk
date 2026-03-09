@@ -1,4 +1,4 @@
-﻿namespace Chunking.FileReaders
+﻿namespace DataInjestion.FileReaders
 {
     internal static class FileExtentionMap
     {

@@ -1,4 +1,4 @@
-﻿namespace Chunking.FileReaders
+﻿namespace DataInjestion.FileReaders
 {
     /// <summary>
     /// IFileReaders provide the file content 
