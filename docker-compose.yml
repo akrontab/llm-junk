@@ -61,12 +61,14 @@ services:
       - chroma_data:/chroma/chroma  # Persist your index
 
   dotnet-api:
-    build: ./MyAiApi
+    build:
+      context: .
+      dockerfile: MyAiApi/dockerfile
     container_name: dotnet_api
     environment:
       - AI_ENDPOINT=http://ollama_service:11434
       - ASPNETCORE_URLS=http://+:8080
-      - CHROMADB_ENDPOINT = http://chromadb:8000
+      - CHROMADB_ENDPOINT=http://chromadb:8000
     ports:
       - "5000:8080"
     # We remove the direct dependency on the ollama YAML key 
@@ -80,7 +82,8 @@ services:
 
   file-watcher:
     build: 
-      context: ./MyFileWatcher
+      context: .
+      dockerfile: MyFileWatcher/dockerfile
     container_name: file_watcher
     volumes:
       # Use a relative path so it works on both Linux and Windows

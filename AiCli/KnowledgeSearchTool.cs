@@ -29,7 +29,7 @@ public class KnowledgeBasePlugin(string aiEndpoint)
 
         await foreach (var result in results)
         {
-            combinedText.AppendLine($"\n- {result.Metadata.Text})";
+            combinedText.AppendLine($"\n- {result.Metadata.Text}");
         }
 
         return combinedText.Length > 0

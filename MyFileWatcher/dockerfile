@@ -1,8 +1,11 @@
 # Use .NET 10.0 to match your scaffolded project
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY *.csproj ./
-RUN dotnet restore
+
+#COPY *.csproj ./
+COPY ["MyFileWatcher/MyFileWatcher.csproj", "MyFileWatcher/"]
+
+RUN dotnet restore "MyFileWatcher/MyFileWatcher.csproj"
 COPY . .
 RUN dotnet publish -c Release -o /app/out
 

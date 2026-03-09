@@ -1,0 +1,26 @@
+# IDE and System files
+.vscode/
+.idea/
+.git/
+.gitignore
+*.swp
+*.user
+*.suo
+Thumbs.db
+.DS_Store
+
+# .NET build artifacts
+**/bin/
+**/obj/
+**/publish/
+
+# Local data volumes (CRITICAL for your RAG setup)
+# These are handled by Docker Compose volumes, we don't want them in the image
+ollama_storage/
+chroma_data/
+ai-docs/
+
+# Docker specific
+docker-compose*
+**/*.dockerignore
+**/Dockerfile*

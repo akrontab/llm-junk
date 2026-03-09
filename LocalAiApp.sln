@@ -1,13 +1,15 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.5.2.0
+# Visual Studio Version 18
+VisualStudioVersion = 18.3.11520.95
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MyAiApi", "MyAiApi\MyAiApi.csproj", "{04C890D3-E755-6023-BAB4-9A1F6EED575B}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MyFileWatcher", "MyFileWatcher\MyFileWatcher.csproj", "{94F83578-C995-4863-8D72-F816321CFE45}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AiCli", "AiCli\AiCli.csproj", "{9F670048-B251-4D36-BE35-A0A2D869EF98}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DataInjestion", "DataInjestion\DataInjestion.csproj", "{48753631-F9E7-A85D-8273-8A56A5A76468}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -55,6 +57,18 @@ Global
 		{9F670048-B251-4D36-BE35-A0A2D869EF98}.Release|x64.Build.0 = Release|Any CPU
 		{9F670048-B251-4D36-BE35-A0A2D869EF98}.Release|x86.ActiveCfg = Release|Any CPU
 		{9F670048-B251-4D36-BE35-A0A2D869EF98}.Release|x86.Build.0 = Release|Any CPU
+		{48753631-F9E7-A85D-8273-8A56A5A76468}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{48753631-F9E7-A85D-8273-8A56A5A76468}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{48753631-F9E7-A85D-8273-8A56A5A76468}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{48753631-F9E7-A85D-8273-8A56A5A76468}.Debug|x64.Build.0 = Debug|Any CPU
+		{48753631-F9E7-A85D-8273-8A56A5A76468}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{48753631-F9E7-A85D-8273-8A56A5A76468}.Debug|x86.Build.0 = Debug|Any CPU
+		{48753631-F9E7-A85D-8273-8A56A5A76468}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{48753631-F9E7-A85D-8273-8A56A5A76468}.Release|Any CPU.Build.0 = Release|Any CPU
+		{48753631-F9E7-A85D-8273-8A56A5A76468}.Release|x64.ActiveCfg = Release|Any CPU
+		{48753631-F9E7-A85D-8273-8A56A5A76468}.Release|x64.Build.0 = Release|Any CPU
+		{48753631-F9E7-A85D-8273-8A56A5A76468}.Release|x86.ActiveCfg = Release|Any CPU
+		{48753631-F9E7-A85D-8273-8A56A5A76468}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
