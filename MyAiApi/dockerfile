@@ -3,7 +3,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 #COPY *.csproj ./
 COPY ["MyAiApi/MyAiApi.csproj", "MyAiApi/"]
-COPY ["DataInjestion/*.csproj", "DataInjestion/"]
+COPY ["DataIngestion/*.csproj", "DataIngestion/"]
 RUN dotnet restore MyAiApi/MyAiApi.csproj
 COPY . .
 RUN dotnet publish -c Release -o /app/out
