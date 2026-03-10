@@ -14,32 +14,23 @@ builder.Services.AddHostedService<FileWatcherService>(sp =>
 var host = builder.Build();
 host.Run();
 
-public class FileWatcherService : BackgroundService
+public class FileWatcherService(string path, string apiUrl) : BackgroundService
 {
-    private readonly string _path;
-    private readonly string _apiUrl;
-    private readonly HttpClient _httpClient;
+    private readonly HttpClient _httpClient = new();
     // Track files we've already handled to avoid infinite loops
-    private readonly HashSet<string> _knownFiles = new();
-
-    public FileWatcherService(string path, string apiUrl)
-    {
-        _path = path;
-        _apiUrl = apiUrl;
-        _httpClient = new HttpClient();
-    }
+    private readonly HashSet<string> _knownFiles = [];
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!Directory.Exists(_path)) Directory.CreateDirectory(_path);
+        if (!Directory.Exists(path)) Directory.CreateDirectory(path);
 
-        Console.WriteLine($"Polling for new documents in: {_path} every 2 seconds...");
+        Console.WriteLine($"Polling for new documents in: {path} every 2 seconds...");
 
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                var currentFiles = Directory.GetFiles(_path);
+                var currentFiles = Directory.GetFiles(path);
 
                 foreach (var filePath in currentFiles)
                 {
@@ -83,7 +74,7 @@ public class FileWatcherService : BackgroundService
             streamContent.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
             form.Add(streamContent, "file", Path.GetFileName(filePath));
 
-            var response = await _httpClient.PostAsync(_apiUrl, form);
+            var response = await _httpClient.PostAsync(apiUrl, form);
 
             if (response.IsSuccessStatusCode)
             {
