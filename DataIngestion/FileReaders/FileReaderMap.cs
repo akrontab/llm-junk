@@ -1,6 +1,6 @@
 ﻿namespace DataIngestion.FileReaders
 {
-    internal static class FileExtentionMap
+    internal static class FileReaderMap
     {
         public static Dictionary<string, IFileReader> FileReaders = new Dictionary<string, IFileReader>
         {
