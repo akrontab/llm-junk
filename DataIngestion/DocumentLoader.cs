@@ -6,7 +6,7 @@ namespace DataIngestion.Chunking
     {
         public async Task<string> LoadDocumentAsync(string fileType, Stream bytes)
         {
-            var fileReader = FileExtentionMap.FileReaders[fileType];
+            var fileReader = FileReaderMap.FileReaders[fileType];
 
             if (fileReader == null)
             {
