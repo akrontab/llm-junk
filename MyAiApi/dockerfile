@@ -6,7 +6,7 @@ COPY ["MyAiApi/MyAiApi.csproj", "MyAiApi/"]
 COPY ["DataIngestion/*.csproj", "DataIngestion/"]
 RUN dotnet restore MyAiApi/MyAiApi.csproj
 COPY . .
-RUN dotnet publish -c Release -o /app/out
+RUN dotnet publish -c Debug -o /app/out
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app

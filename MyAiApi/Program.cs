@@ -1,10 +1,46 @@
 using DataIngestion;
+using OpenTelemetry.Trace;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 
 public partial class Program
 {
     private static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+
+        builder.Services.AddOpenTelemetry()
+        .ConfigureResource( resource =>  
+            resource.AddService("dotnet-api")
+            .AddAttributes(new Dictionary<string, object>
+            {
+                ["deployment.environment"] = "development",
+                ["host.name"] = Environment.MachineName
+            })
+        )
+        .WithTracing(tracing =>
+        {
+            tracing
+                .AddAspNetCoreInstrumentation() // Tracks HTTP requests
+                .AddHttpClientInstrumentation() // Tracks calls to Ollama/Chroma
+                .AddSource("DataIngestion.Orchestrator")
+                .AddOtlpExporter(opt =>
+                {
+                    opt.Endpoint = new Uri("http://aspire-dashboard:18889");
+                });
+        })
+        .WithMetrics(metrics =>
+        {
+            metrics
+            // This is the extension method from OpenTelemetry.Metrics
+            .AddMeter("DataIngestion.Orchestrator")
+            .AddAspNetCoreInstrumentation()
+            .AddRuntimeInstrumentation()
+            .AddOtlpExporter(opt =>
+            {
+                opt.Endpoint = new Uri("http://aspire-dashboard:18889");
+            });
+        });
 
         // 1. Unify the Endpoint: Use the ENV var or a reliable default
         var aiEndpoint = builder.Configuration["AI_ENDPOINT"] ?? "http://ollama_service:11434";

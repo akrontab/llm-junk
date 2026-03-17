@@ -93,6 +93,17 @@ services:
     depends_on:
       - dotnet-api
 
+  aspire-dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:9.0
+    container_name: aspire-dashboard
+    ports:
+      - "18888:18888" # Dashboard UI (Browser)
+      - "4317:18889" # OTLP gRPC (External 4317 -> Internal 18889)
+      - "4318:18890" # OTLP HTTP (Optional: if you ever use web-based OTLP)
+    environment:
+      # Use ASPIRE_ prefix for modern versions
+      - ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true
+
 volumes:
   ollama_storage:
   chroma_data:
