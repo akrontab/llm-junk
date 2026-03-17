@@ -25,7 +25,7 @@ namespace DataIngestion
             _chromaEndpoint = chromaEndpoint;
             _http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
 
-            // Initialize Semantic Kernel Memory components once
+            // TODO - Make the model configurable
             IEmbeddingGenerator<string, Embedding<float>> generator =
                 new OllamaEmbeddingGenerator(new Uri(_ollamaUrl), "qwen3-embedding:latest");
 
@@ -44,6 +44,8 @@ namespace DataIngestion
         public async Task ProcessFile(string filename, Stream data)
         {
             var fileExtension = Path.GetExtension(filename).ToLower();
+
+            fileExtension = fileExtension.Replace(".", string.Empty);
 
             // 1. Extract Text
             var documentLoader = new DocumentLoader();

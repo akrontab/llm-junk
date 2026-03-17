@@ -1,17 +1,17 @@
-services:
-  # --- Template (No ports or volumes here) ---
-  x-ollama-base: &ollama-base
-    image: ollama/ollama:latest
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      default:
-        aliases:
-          - ollama_service
+# --- Template (No ports or volumes here) ---
+x-ollama-base: &ollama-base
+  image: ollama/ollama:latest
+  healthcheck:
+    test: ["CMD", "ollama", "list"]
+    interval: 10s
+    timeout: 5s
+    retries: 5
+  networks:
+    default:
+      aliases:
+        - ollama_service
 
+services:
   ollama-gpu:
     <<: *ollama-base
     container_name: ollama_service
