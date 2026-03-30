@@ -45,8 +45,6 @@ services:
     networks:
       - default
     entrypoint: /bin/sh -c "ollama serve & sleep 5 && ollama pull llama3.2:3b && ollama pull qwen3-embedding && pkill ollama & sleep 5"
-    depends_on:
-      - vector_store
 
   vector_store:
     image: qdrant/qdrant:latest
@@ -65,7 +63,7 @@ services:
     environment:
       - AI_ENDPOINT=http://ollama_service:11434
       - ASPNETCORE_URLS=http://+:8080
-      - VECTOR_STORE_ENDPOINT=http://vector_store:6333
+      - VECTOR_STORE_ENDPOINT=http://vector_store:6334
     ports:
       - "5000:8080"
     depends_on:
@@ -82,7 +80,7 @@ services:
     volumes:
       - ./ai-docs:/watch_folder 
     environment:
-      - AI_UPLOAD_URL=http://dotnet-api:8080/upload
+      - AI_UPLOAD_URL=http://dotnet_api:8080/ingestion/upload
     depends_on:
       - dotnet-api
 

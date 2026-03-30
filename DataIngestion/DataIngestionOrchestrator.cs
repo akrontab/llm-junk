@@ -1,148 +1,132 @@
 ﻿using DataIngestion.Chunkers;
-using DataIngestion.Chunking;
 using DataIngestion.Models;
-using DataIngestion.Services; // Ensure this matches your TokenCounter namespace
+using DataIngestion.Services;
 using Microsoft.Extensions.AI;
-using Microsoft.SemanticKernel.Connectors.Chroma;
-using Microsoft.SemanticKernel.Embeddings;
-using Microsoft.SemanticKernel.Memory;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Net;
 using System.Net.Http.Json;
-using System.Text.Json;
-using static System.Net.Mime.MediaTypeNames;
+using VectorStore.Abstractions;
 
-namespace DataIngestion
+namespace DataIngestion;
+
+public class DataIngestionOrchestrator
 {
-    public class DataIngestionOrchestrator
+    private readonly HttpClient _http;
+    private readonly string _ollamaUrl;
+    private readonly IVectorStore _vectorStore;
+    private readonly TokenCounter _tokenCounter;
+    private readonly IEmbeddingGenerator<string, Embedding<float>> _embeddingGenerator;
+
+    // --- Observability Setup ---
+    private static readonly ActivitySource _source = new("DataIngestion.Orchestrator");
+    private static readonly Meter _meter = new("DataIngestion.Orchestrator");
+    private static readonly Histogram<int> _tokenHistogram =
+        _meter.CreateHistogram<int>("ingestion.tokens_per_chunk", "tokens", "Tokens used per chunk after enhancement");
+
+    public DataIngestionOrchestrator(
+        IVectorStore vectorStore,
+        IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
+        string ollamaBaseUrl = "http://localhost:11434")
     {
-        private readonly HttpClient _http;
-        private readonly string _ollamaUrl;
-        private readonly string _chromaEndpoint;
-        private readonly TokenCounter _tokenCounter;
-        private static readonly ActivitySource _source = new("DataIngestion.Orchestrator");
+        _vectorStore = vectorStore;
+        _embeddingGenerator = embeddingGenerator;
+        _ollamaUrl = ollamaBaseUrl;
 
-        private static readonly Meter _meter = new("DataIngestion.Orchestrator");
+        _http = new HttpClient { 
+            Timeout = TimeSpan.FromMinutes(5),
+            DefaultRequestVersion = HttpVersion.Version11,
+            DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact
+        };
+        _tokenCounter = new TokenCounter();
+    }
 
-        // 2. Define specific instruments
-        private static readonly Histogram<int> _tokenHistogram =
-            _meter.CreateHistogram<int>("ingestion.tokens_per_file", "tokens", "Tokens used per file");
+    public async Task ProcessFile(string filename, Stream data)
+    {
+        using var activity = _source.StartActivity("ProcessFile");
+        activity?.SetTag("file.name", filename);
 
-        private static readonly Counter<long> _totalTokens =
-            _meter.CreateCounter<long>("ingestion.total_tokens", "tokens", "Total tokens processed");
+        var rawExtension = Path.GetExtension(filename).ToLower();
+        var fileExtension = rawExtension.Replace(".", string.Empty);
 
-#pragma warning disable SKEXP0001
-        private readonly ISemanticTextMemory _memory;
-#pragma warning restore SKEXP0001
+        // 1. Extract Text
+        var documentLoader = new DocumentLoader();
+        string fullText = await documentLoader.LoadDocumentAsync(fileExtension, data);
+        if (string.IsNullOrWhiteSpace(fullText)) return;
 
-        public DataIngestionOrchestrator(string ollamaBaseUrl = "http://localhost:11434", string chromaEndpoint = "http://localhost:8000")
+        // 2. Generate Global Context (The "Big Picture" Summary)
+        string globalSummary = await GetGlobalSummary(filename, fullText);
+
+        // 3. Select Chunker
+        if (!ChunkerMap.Chunkers.TryGetValue(fileExtension, out var chunker))
         {
-            _ollamaUrl = ollamaBaseUrl;
-            _chromaEndpoint = chromaEndpoint;
-            _http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
-
-            // Initialize the TokenCounter once for the lifetime of the orchestrator
-            _tokenCounter = new TokenCounter();
-
-            // Setup Embedding Generator
-            IEmbeddingGenerator<string, Embedding<float>> generator =
-                new OllamaEmbeddingGenerator(new Uri(_ollamaUrl), "qwen3-embedding:latest");
-
-#pragma warning disable SKEXP0020
-            var chromaStore = new ChromaMemoryStore(_chromaEndpoint);
-#pragma warning restore SKEXP0020
-
-#pragma warning disable SKEXP0001
-            _memory = new MemoryBuilder()
-                .WithTextEmbeddingGeneration(generator.AsTextEmbeddingGenerationService())
-                .WithMemoryStore(chromaStore)
-                .Build();
-#pragma warning restore SKEXP0001
+            chunker = ChunkerMap.Chunkers["txt"];
         }
 
-        public async Task ProcessFile(string filename, Stream data)
+        var rawChunks = chunker.CreateChunks(fullText);
+        var enhancer = new MetadataEnhancer();
+
+        // 4. Processing Loop
+        for (int i = 0; i < rawChunks.Count; i++)
         {
-            using var activity = _source.StartActivity("ProcessFile");
-            activity?.SetTag("file.name", filename);
+            using var loopActivity = _source.StartActivity("ProcessChunk");
+            loopActivity?.SetTag("chunk.index", i);
 
-            var rawExtension = Path.GetExtension(filename).ToLower();
-            var fileExtension = rawExtension.Replace(".", string.Empty);
+            // Enhance with metadata
+            var enhanced = enhancer.Enhance(rawChunks[i], filename, globalSummary, i);
 
-            // 1. Extract Text
-            var documentLoader = new DocumentLoader();
-            string fullText = await documentLoader.LoadDocumentAsync(fileExtension, data);
-            if (string.IsNullOrWhiteSpace(fullText)) return;
+            // Apply Token Safety Buffer (1800 for Qwen/Ollama safety)
+            string safeContent = _tokenCounter.LimitToMax(enhanced.SearchableContent, 1800);
 
-            // 2. Generate Global Context (The "Big Picture" Summary)
-            string globalSummary = await GetGlobalSummary(filename, fullText);
+            // Record Metric
+            int finalTokenCount = _tokenCounter.Count(safeContent);
+            _tokenHistogram.Record(finalTokenCount, new TagList { { "file_type", fileExtension } });
 
-            // 3. Chunk & Enhance
-            if (!ChunkerMap.Chunkers.TryGetValue(rawExtension, out var chunker))
-            {
-                chunker = ChunkerMap.Chunkers["txt"];
-            }
+            // Generate Embedding
+            var embedding = await _embeddingGenerator.GenerateAsync(safeContent);
 
-            var rawChunks = chunker.CreateChunks(fullText);
-            var enhancer = new MetadataEnhancer();
-            try
-            {
-                using (var childActivity = _source.StartActivity("EmbeddingGeneration"))
-                {
-                    for (int i = 0; i < rawChunks.Count; i++)
-                    {
-                        var enhanced = enhancer.Enhance(rawChunks[i], filename, globalSummary, i);
+            // Create Deterministic ID (Prevents duplicates in Qdrant)
+            Guid chunkId = CreateDeterministicGuid($"{filename}_{i}");
 
-                        // 4. APPLY SAFETY BUFFER
-                        // We truncate the SearchableContent to 1800 tokens to ensure the 
-                        // embedding model doesn't throw a context length error.
-                        string safeContent = _tokenCounter.LimitToMax(enhanced.SearchableContent, 1800);
-
-                        int count = _tokenCounter.Count(safeContent);
-
-                        _tokenHistogram.Record(count, new TagList { { "file_type", fileExtension } });
-                        _totalTokens.Add(count);
-
-                        // 5. Store via Semantic Kernel
-                        // We use the safeContent for vectorization but keep the enhanced metadata
-                        await StoreInVectorDb(safeContent, enhanced.Metadata, filename, i);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-                throw;
-            }
+            // Store in generalized Vector Store
+            await _vectorStore.UpsertAsync(
+                chunkId,
+                embedding.Vector,
+                safeContent,
+                enhanced.Metadata);
         }
+    }
 
-        private async Task StoreInVectorDb(string content, Dictionary<string, object> metadata, string filename, int index)
+    private async Task<string> GetGlobalSummary(string fileName, string text)
+    {
+        using var activity = _source.StartActivity("GenerateGlobalSummary");
+
+        var sample = text[..Math.Min(text.Length, 3000)];
+        var request = new
         {
-#pragma warning disable SKEXP0001
-            await _memory.SaveInformationAsync(
-                collection: "knowledge_base",
-                text: content,
-                id: $"{filename}_{index}",
-                description: filename,
-                additionalMetadata: JsonSerializer.Serialize(metadata)
-            );
-#pragma warning restore SKEXP0001
-        }
+            model = "llama3.2:3b",
+            prompt = $"Summarize this document in UNDER 30 WORDS for a search index. File: {fileName}\nContent: {sample}",
+            stream = false
+        };
 
-        private async Task<string> GetGlobalSummary(string fileName, string text)
+        try
         {
-            // We use the first 3000 chars as a representative sample
-            var sample = text[..Math.Min(text.Length, 3000)];
-            var request = new
-            {
-                model = "llama3.2",
-                prompt = $"Summarize this document in UNDER 30 WORDS for a search index. File: {fileName}\nContent: {sample}",
-                stream = false
-            };
-
-            var response = await _http.PostAsJsonAsync($"{_ollamaUrl}/api/generate", request);
+            var baseUrl = _ollamaUrl.TrimEnd('/');
+            var response = await _http.PostAsJsonAsync($"{baseUrl}/api/generate", request);
             var result = await response.Content.ReadFromJsonAsync<OllamaGenerateResponse>();
-
             return result?.Response?.Trim() ?? "General document context.";
         }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            return "Context unavailable.";
+        }
+    }
+
+    private Guid CreateDeterministicGuid(string input)
+    {
+        using var md5 = System.Security.Cryptography.MD5.Create();
+        byte[] hash = md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(input));
+        return new Guid(hash);
     }
 }

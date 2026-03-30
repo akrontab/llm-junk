@@ -1,72 +1,67 @@
 using DataIngestion;
-using OpenTelemetry.Trace;
+using Microsoft.Extensions.AI;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using VectorStore.Abstractions;
+using VectorStore.Providers;
 
-public partial class Program
-{
-    private static void Main(string[] args)
-    {
-        var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 
-        builder.Services.AddOpenTelemetry()
-        .ConfigureResource( resource =>  
-            resource.AddService("dotnet-api")
-            .AddAttributes(new Dictionary<string, object>
-            {
-                ["deployment.environment"] = "development",
-                ["host.name"] = Environment.MachineName
-            })
-        )
-        .WithTracing(tracing =>
+// --- 1. Configuration & Identity ---
+var serviceName = "dotnet-api";
+var aiEndpoint = builder.Configuration["AI_ENDPOINT"] ?? "http://ollama_service:11434";
+var vectorStoreEndpoint = builder.Configuration["VECTOR_STORE_ENDPOINT"] ?? "http://vector_store:6334";
+
+// --- 2. OpenTelemetry (Observability) ---
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource
+        .AddService(serviceName)
+        .AddAttributes(new Dictionary<string, object>
         {
-            tracing
-                .AddAspNetCoreInstrumentation() // Tracks HTTP requests
-                .AddHttpClientInstrumentation() // Tracks calls to Ollama/Chroma
-                .AddSource("DataIngestion.Orchestrator")
-                .AddOtlpExporter(opt =>
-                {
-                    opt.Endpoint = new Uri("http://aspire-dashboard:18889");
-                });
-        })
-        .WithMetrics(metrics =>
-        {
-            metrics
-            // This is the extension method from OpenTelemetry.Metrics
-            .AddMeter("DataIngestion.Orchestrator")
-            .AddAspNetCoreInstrumentation()
-            .AddRuntimeInstrumentation()
-            .AddOtlpExporter(opt =>
-            {
-                opt.Endpoint = new Uri("http://aspire-dashboard:18889");
-            });
-        });
+            ["deployment.environment"] = builder.Environment.EnvironmentName,
+            ["host.name"] = Environment.MachineName
+        }))
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddSource("DataIngestion.Orchestrator") // Matches your Orchestrator ActivitySource
+        .AddOtlpExporter(opt => opt.Endpoint = new Uri("http://aspire-dashboard:4317")))
+    .WithMetrics(metrics => metrics
+        .AddAspNetCoreInstrumentation()
+        .AddRuntimeInstrumentation()
+        .AddMeter("DataIngestion.Orchestrator") // Matches your Orchestrator Meter
+        .AddOtlpExporter(opt => opt.Endpoint = new Uri("http://aspire-dashboard:4317")));
 
-        // 1. Unify the Endpoint: Use the ENV var or a reliable default
-        var aiEndpoint = builder.Configuration["AI_ENDPOINT"] ?? "http://ollama_service:11434";
-        var chromaEndpoint = builder.Configuration["CHROMADB_ENDPOINT"] ?? "http://chromadb:8000";
+// --- 3. Dependency Injection (DI) ---
+builder.Services.AddControllers();
 
-        // Log it so you can see it in 'docker logs dotnet_api'
-        Console.WriteLine($"[Config] Connecting to Ollama at: {aiEndpoint}");
+// A. Register Vector Store (Qdrant Implementation)
+builder.Services.AddSingleton<IVectorStore>(new QdrantVectorStore(vectorStoreEndpoint));
 
-        var app = builder.Build();
+// B. Register Ollama Services (Using Microsoft.Extensions.AI)
+// This requires the 'Microsoft.Extensions.AI.Ollama' NuGet package
+builder.Services.AddChatClient(new OllamaChatClient(new Uri(aiEndpoint), "llama3.2"));
+builder.Services.AddEmbeddingGenerator(new OllamaEmbeddingGenerator(new Uri(aiEndpoint), "qwen3-embedding"));
 
-        app.MapPost("/upload", async (IFormFile file) =>
-        {
-            if (file == null || file.Length == 0)
-                return Results.BadRequest("No file uploaded.");
+// C. Register the Orchestrator (Resolved via DI)
+builder.Services.AddScoped<DataIngestionOrchestrator>(sp =>
+    new DataIngestionOrchestrator(
+        sp.GetRequiredService<IVectorStore>(),
+        sp.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>(),
+        aiEndpoint
+    ));
 
-            // 1. Initialize our self-contained Orchestrator
-            var orchestrator = new DataIngestionOrchestrator(aiEndpoint, chromaEndpoint);
+// --- 4. App Pipeline ---
+var app = builder.Build();
 
-            // 2. Process via the new Contextual Library
-            using var stream = file.OpenReadStream();
-            await orchestrator.ProcessFile(file.FileName, stream);
+// Enable Controller routing
+app.MapControllers();
 
-            return Results.Ok(new { Message = $"Successfully processed {file.FileName} with contextual embeddings." });
-        })
-        .DisableAntiforgery();
+// Basic root check
+app.MapGet("/", () => $"AI API is running. Ollama: {aiEndpoint} | VectorStore: {vectorStoreEndpoint}");
 
-        app.Run();
-    }
-}
+app.Run();
+
+// Required for integration testing or internal assembly visibility
+public partial class Program { }

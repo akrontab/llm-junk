@@ -1,39 +1,36 @@
-using Microsoft.Extensions.AI;
-using Microsoft.SemanticKernel.Connectors.Chroma;
-using Microsoft.SemanticKernel.Embeddings;
-using Microsoft.SemanticKernel.Memory;
 using System.ComponentModel;
 using System.Text;
+using Microsoft.Extensions.AI;
+using VectorStore.Abstractions;
 
-public class KnowledgeBasePlugin(string aiEndpoint)
+public class KnowledgeBasePlugin(
+    IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
+    IVectorStore vectorStore)
 {
     [Description("Searches the internal knowledge base for documents related to a query.")]
     public async Task<string> SearchDocuments(
         [Description("The search query or topic to look up")] string query)
     {
-        var generator = new OllamaEmbeddingGenerator(new Uri(aiEndpoint), "qwen3-embedding:latest");
+        // 1. Generate the embedding for the query string
+        var queryEmbedding = await embeddingGenerator.GenerateAsync(query);
 
-#pragma warning disable SKEXP0020 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-        var chromaStore = new ChromaMemoryStore("http://localhost:8000");
-#pragma warning restore SKEXP0020 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+        // 2. Search our abstract Vector Store
+        var results = await vectorStore.SearchAsync(queryEmbedding.Vector, limit: 3);
 
-#pragma warning disable SKEXP0001
-        var memory = new MemoryBuilder()
-            .WithTextEmbeddingGeneration(generator.AsTextEmbeddingGenerationService())
-            .WithMemoryStore(chromaStore)
-            .Build();
-#pragma warning restore SKEXP0020 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
-        var results = memory.SearchAsync("knowledge_base", query, limit: 3);
-        var combinedText = new StringBuilder();
-
-        await foreach (var result in results)
+        if (results.Count == 0)
         {
-            combinedText.AppendLine($"\n- {result.Metadata.Text}");
+            return "No relevant documents found in the internal knowledge base.";
         }
 
-        return combinedText.Length > 0
-            ? "No relevant documents found."
-            : $"Found these documents:\n{combinedText}";
+        // 3. Format the results
+        var combinedText = new StringBuilder();
+        combinedText.AppendLine("I found these relevant documents in the knowledge base:");
+
+        foreach (var result in results)
+        {
+            combinedText.AppendLine($"\n- {result.Content}");
+        }
+
+        return combinedText.ToString();
     }
 }

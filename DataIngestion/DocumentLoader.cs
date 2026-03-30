@@ -1,6 +1,6 @@
 ﻿using DataIngestion.FileReaders;
 
-namespace DataIngestion.Chunking
+namespace DataIngestion
 {
     internal class DocumentLoader
     {

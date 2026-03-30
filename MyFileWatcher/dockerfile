@@ -7,7 +7,7 @@ COPY ["MyFileWatcher/MyFileWatcher.csproj", "MyFileWatcher/"]
 
 RUN dotnet restore "MyFileWatcher/MyFileWatcher.csproj"
 COPY . .
-RUN dotnet publish -c Release -o /app/out
+RUN dotnet publish -c Debug -o /app/out
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app

@@ -3,6 +3,8 @@
 ##
 ## Get latest from `dotnet new gitignore`
 
+ai-docs/
+
 # dotenv files
 .env
 
@@ -480,3 +482,4 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+

@@ -1,6 +1,0 @@
-@MyAiApi_HostAddress = http://localhost:5238
-
-GET {{MyAiApi_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###

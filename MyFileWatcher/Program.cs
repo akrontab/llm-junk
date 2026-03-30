@@ -6,7 +6,7 @@ var builder = Host.CreateApplicationBuilder(args);
 
 // Configuration
 var watchPath = "/watch_folder";
-var apiUploadUrl = Environment.GetEnvironmentVariable("AI_UPLOAD_URL") ?? "http://dotnet-api:8080/upload";
+var apiUploadUrl = Environment.GetEnvironmentVariable("AI_UPLOAD_URL") ?? "http://dotnet_api:8080/ingestion/upload";
 
 builder.Services.AddHostedService<FileWatcherService>(sp =>
     new FileWatcherService(watchPath, apiUploadUrl));
@@ -71,7 +71,7 @@ public class FileWatcherService(string path, string apiUrl) : BackgroundService
             using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             using var streamContent = new StreamContent(fileStream);
 
-            streamContent.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
+            streamContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
             form.Add(streamContent, "file", Path.GetFileName(filePath));
 
             var response = await _httpClient.PostAsync(apiUrl, form);
